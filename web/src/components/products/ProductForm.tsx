@@ -50,7 +50,7 @@ export function ProductForm({
     if (!formData.price || parseFloat(formData.price) < 0) {
       newErrors.price = 'Price must be a positive number';
     }
-    if (formData.quantity && parseInt(formData.quantity) < 0) {
+    if (!isEdit && formData.quantity && parseInt(formData.quantity) < 0) {
       newErrors.quantity = 'Quantity cannot be negative';
     }
     if (!isEdit && !formData.storeId) newErrors.storeId = 'Store is required';
@@ -64,18 +64,32 @@ export function ProductForm({
 
     if (!validate()) return;
 
-    const data: CreateProductDto | UpdateProductDto = {
-      name: formData.name.trim(),
-      description: formData.description.trim() || undefined,
-      sku: formData.sku.trim(),
-      category: formData.category,
-      price: parseFloat(formData.price),
-      quantity: parseInt(formData.quantity) || 0,
-      minStock: parseInt(formData.minStock) || 10,
-      ...(isEdit ? {} : { storeId: formData.storeId }),
-    };
-
-    onSubmit(data);
+    if (isEdit && product) {
+      // Update: include version for optimistic locking, exclude quantity
+      const data: UpdateProductDto = {
+        name: formData.name.trim(),
+        description: formData.description.trim() || undefined,
+        sku: formData.sku.trim(),
+        category: formData.category,
+        price: parseFloat(formData.price),
+        minStock: parseInt(formData.minStock) || 10,
+        version: product.version,
+      };
+      onSubmit(data);
+    } else {
+      // Create: include quantity and storeId
+      const data: CreateProductDto = {
+        name: formData.name.trim(),
+        description: formData.description.trim() || undefined,
+        sku: formData.sku.trim(),
+        category: formData.category,
+        price: parseFloat(formData.price),
+        quantity: parseInt(formData.quantity) || 0,
+        minStock: parseInt(formData.minStock) || 10,
+        storeId: formData.storeId,
+      };
+      onSubmit(data);
+    }
   };
 
   const handleChange = (field: keyof typeof formData, value: string) => {
@@ -119,7 +133,7 @@ export function ProductForm({
           required
         />
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className={`grid ${isEdit ? 'grid-cols-2' : 'grid-cols-3'} gap-4`}>
         <Input
           label="Price"
           type="number"
@@ -130,14 +144,16 @@ export function ProductForm({
           error={errors.price}
           required
         />
-        <Input
-          label="Quantity"
-          type="number"
-          min="0"
-          value={formData.quantity}
-          onChange={(e) => handleChange('quantity', e.target.value)}
-          error={errors.quantity}
-        />
+        {!isEdit && (
+          <Input
+            label="Initial Quantity"
+            type="number"
+            min="0"
+            value={formData.quantity}
+            onChange={(e) => handleChange('quantity', e.target.value)}
+            error={errors.quantity}
+          />
+        )}
         <Input
           label="Min Stock"
           type="number"

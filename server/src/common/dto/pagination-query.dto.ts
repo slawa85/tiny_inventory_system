@@ -1,22 +1,11 @@
-import { IsOptional, IsInt, Min, Max, IsString, IsIn } from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class PaginationQueryDto {
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
+export const paginationQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  sortBy: z.string().default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});
 
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number = 20;
-
-  @IsOptional()
-  @IsString()
-  sortBy?: string = 'createdAt';
-
-  @IsOptional()
-  @IsIn(['asc', 'desc'])
-  sortOrder?: 'asc' | 'desc' = 'desc';
-}
+export class PaginationQueryDto extends createZodDto(paginationQuerySchema) {}

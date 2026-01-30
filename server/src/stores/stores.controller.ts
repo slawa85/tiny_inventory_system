@@ -8,6 +8,7 @@ import {
   Param,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { StoresService } from './stores.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
@@ -27,6 +28,7 @@ export class StoresController {
   }
 
   @Post()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   create(@Body() createStoreDto: CreateStoreDto) {
     return this.storesService.create(createStoreDto);
   }
@@ -40,6 +42,7 @@ export class StoresController {
   }
 
   @Delete(':id')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.storesService.remove(id);
   }

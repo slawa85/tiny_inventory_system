@@ -1,49 +1,15 @@
-import {
-  IsString,
-  IsOptional,
-  IsNotEmpty,
-  IsNumber,
-  IsInt,
-  IsUUID,
-  Min,
-  MaxLength,
-} from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class CreateProductDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  name: string;
+export const createProductSchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().max(1000).optional(),
+  sku: z.string().min(1).max(50),
+  category: z.string().min(1).max(100),
+  price: z.number().min(0),
+  quantity: z.number().int().min(0).default(0),
+  minStock: z.number().int().min(0).default(10),
+  storeId: z.string().uuid(),
+});
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(1000)
-  description?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
-  sku: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
-  category: string;
-
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  price: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  quantity?: number = 0;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  minStock?: number = 10;
-
-  @IsUUID()
-  storeId: string;
-}
+export class CreateProductDto extends createZodDto(createProductSchema) {}

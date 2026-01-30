@@ -1,38 +1,18 @@
-import { IsOptional, IsString, IsUUID, IsNumber, IsBoolean, Min, IsIn } from 'class-validator';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+import { paginationQuerySchema } from '../../common/dto/pagination-query.dto';
 
-export class ProductQueryDto extends PaginationQueryDto {
-  @IsOptional()
-  @IsUUID()
-  storeId?: string;
+export const productQuerySchema = paginationQuerySchema.extend({
+  storeId: z.string().uuid().optional(),
+  category: z.string().optional(),
+  minPrice: z.coerce.number().min(0).optional(),
+  maxPrice: z.coerce.number().min(0).optional(),
+  inStock: z.coerce.boolean().optional(),
+  lowStock: z.coerce.boolean().optional(),
+  search: z.string().optional(),
+  sortBy: z
+    .enum(['name', 'price', 'quantity', 'createdAt', 'category', 'sku'])
+    .default('createdAt'),
+});
 
-  @IsOptional()
-  @IsString()
-  category?: string;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  minPrice?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  maxPrice?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  inStock?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  lowStock?: boolean;
-
-  @IsOptional()
-  @IsString()
-  search?: string;
-
-  @IsOptional()
-  @IsIn(['name', 'price', 'quantity', 'createdAt', 'category', 'sku'])
-  override sortBy?: string = 'createdAt';
-}
+export class ProductQueryDto extends createZodDto(productQuerySchema) {}

@@ -1,4 +1,13 @@
 import { PrismaClient } from '@prisma/client';
+import pino from 'pino';
+
+const logger = pino({
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  transport:
+    process.env.NODE_ENV !== 'production'
+      ? { target: 'pino-pretty', options: { colorize: true } }
+      : undefined,
+});
 
 const prisma = new PrismaClient();
 
@@ -85,7 +94,7 @@ function randomQuantity(minStock: number): number {
 }
 
 async function main() {
-  console.log('Seeding database...');
+  logger.info('Seeding database...');
 
   // Clear existing data
   await prisma.product.deleteMany();
@@ -96,7 +105,7 @@ async function main() {
     stores.map((store) => prisma.store.create({ data: store }))
   );
 
-  console.log(`Created ${createdStores.length} stores`);
+  logger.info({ storeCount: createdStores.length }, 'Created stores');
 
   // Create products for each store
   let totalProducts = 0;
@@ -122,15 +131,18 @@ async function main() {
 
     await prisma.product.createMany({ data: products });
     totalProducts += products.length;
-    console.log(`Created ${products.length} products for ${store.name}`);
+    logger.info({ productCount: products.length, storeName: store.name }, 'Created products for store');
   }
 
-  console.log(`Seeding complete! Created ${createdStores.length} stores and ${totalProducts} products.`);
+  logger.info(
+    { storeCount: createdStores.length, productCount: totalProducts },
+    'Seeding complete',
+  );
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    logger.error(e, 'Seeding failed');
     process.exit(1);
   })
   .finally(async () => {

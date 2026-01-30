@@ -1,38 +1,14 @@
-import { IsString, IsOptional, IsEmail, IsNotEmpty, MaxLength } from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class CreateStoreDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  name: string;
+export const createStoreSchema = z.object({
+  name: z.string().min(1).max(255),
+  address: z.string().min(1).max(255),
+  city: z.string().min(1).max(100),
+  state: z.string().min(1).max(50),
+  zipCode: z.string().min(1).max(20),
+  phone: z.string().max(20).optional(),
+  email: z.string().email().max(255).optional(),
+});
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  address: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
-  city: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
-  state: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(20)
-  zipCode: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  phone?: string;
-
-  @IsOptional()
-  @IsEmail()
-  @MaxLength(255)
-  email?: string;
-}
+export class CreateStoreDto extends createZodDto(createStoreSchema) {}

@@ -1,23 +1,18 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Logger as PinoLogger } from 'nestjs-pino';
+import { ZodValidationPipe } from 'nestjs-zod';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
-function getCorsConfig() {
-  const allowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS;
+function getCorsConfig(config: ConfigService, logger: Logger) {
+  const allowedOriginsEnv = config.get<string>('CORS_ALLOWED_ORIGINS');
+  const nodeEnv = config.get<string>('NODE_ENV');
 
-  // If no origins configured, reject all cross-origin requests in production
+  // In development without explicit origins, use defaults
   if (!allowedOriginsEnv) {
-    if (process.env.NODE_ENV === 'production') {
-      console.warn(
-        'CORS_ALLOWED_ORIGINS not set in production. All cross-origin requests will be rejected.',
-      );
-      return {
-        origin: false,
-        credentials: true,
-      };
-    }
-    // Development defaults
     return {
       origin: ['http://localhost:8080', 'http://localhost:5173'],
       credentials: true,
@@ -30,6 +25,8 @@ function getCorsConfig() {
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
+
+  logger.log(`CORS configured for origins: ${allowedOrigins.join(', ')}`);
 
   return {
     origin: (
@@ -45,7 +42,7 @@ function getCorsConfig() {
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.warn(`CORS blocked request from origin: ${origin}`);
+        logger.warn(`CORS blocked request from origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -56,27 +53,28 @@ function getCorsConfig() {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // Use Pino logger for all NestJS logging
+  app.useLogger(app.get(PinoLogger));
+
+  const logger = new Logger('Bootstrap');
+  const config = app.get(ConfigService);
+
+  // Security headers
+  app.use(helmet());
 
   app.setGlobalPrefix('api');
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
-    }),
-  );
+  app.useGlobalPipes(new ZodValidationPipe());
 
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  app.enableCors(getCorsConfig());
+  app.enableCors(getCorsConfig(config, logger));
 
-  const port = process.env.PORT || 3000;
+  const port = config.get<number>('PORT', 3000);
   await app.listen(port);
-  console.log(`Application is running on: http://localhost:${port}/api`);
+  logger.log(`Application is running on: http://localhost:${port}/api`);
 }
 
 bootstrap();

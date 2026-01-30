@@ -1,9 +1,15 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
+import { AdjustQuantityDto } from './dto/adjust-quantity.dto';
 import { createPaginatedResponse } from '../common/dto/paginated-response.dto';
 
 @Injectable()
@@ -163,25 +169,77 @@ export class ProductsService {
   }
 
   async update(id: string, updateProductDto: UpdateProductDto) {
-    await this.findOne(id);
+    const { version, ...data } = updateProductDto;
 
     // Check for duplicate SKU if updating
-    if (updateProductDto.sku) {
+    if (data.sku) {
       const existingProduct = await this.prisma.product.findFirst({
         where: {
-          sku: updateProductDto.sku,
+          sku: data.sku,
           NOT: { id },
         },
       });
 
       if (existingProduct) {
-        throw new ConflictException(`Product with SKU ${updateProductDto.sku} already exists`);
+        throw new ConflictException(`Product with SKU ${data.sku} already exists`);
       }
     }
 
+    // Optimistic locking: only update if version matches
+    const result = await this.prisma.product.updateMany({
+      where: {
+        id,
+        version,
+      },
+      data: {
+        ...data,
+        version: { increment: 1 },
+      },
+    });
+
+    if (result.count === 0) {
+      // Check if product exists
+      const product = await this.prisma.product.findUnique({ where: { id } });
+
+      if (!product) {
+        throw new NotFoundException(`Product with ID ${id} not found`);
+      }
+
+      // Product exists but version didn't match
+      throw new ConflictException(
+        'This product was modified by another user. Please refresh and try again.',
+      );
+    }
+
+    return this.prisma.product.findUnique({
+      where: { id },
+      include: { store: true },
+    });
+  }
+
+  async adjustQuantity(id: string, adjustQuantityDto: AdjustQuantityDto) {
+    const { adjustment, reason, note } = adjustQuantityDto;
+
+    // First check if product exists and get current quantity
+    const product = await this.prisma.product.findUnique({ where: { id } });
+
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
+    }
+
+    // Check if adjustment would result in negative quantity
+    if (product.quantity + adjustment < 0) {
+      throw new BadRequestException(
+        `Cannot reduce quantity by ${Math.abs(adjustment)}. Current stock is ${product.quantity}.`,
+      );
+    }
+
+    // Atomic update - no version check needed
     return this.prisma.product.update({
       where: { id },
-      data: updateProductDto,
+      data: {
+        quantity: { increment: adjustment },
+      },
       include: { store: true },
     });
   }

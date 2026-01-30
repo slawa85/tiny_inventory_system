@@ -1,5 +1,11 @@
 import { apiClient } from './client';
-import type { Product, CreateProductDto, UpdateProductDto, ProductQueryParams } from '../types/product.types';
+import type {
+  Product,
+  CreateProductDto,
+  UpdateProductDto,
+  AdjustQuantityDto,
+  ProductQueryParams,
+} from '../types/product.types';
 import type { PaginatedResponse } from '../types/api.types';
 
 export const productsApi = {
@@ -20,6 +26,11 @@ export const productsApi = {
 
   update: async (id: string, data: UpdateProductDto): Promise<Product> => {
     const response = await apiClient.patch<Product>(`/products/${id}`, data);
+    return response.data;
+  },
+
+  adjustQuantity: async (id: string, data: AdjustQuantityDto): Promise<Product> => {
+    const response = await apiClient.post<Product>(`/products/${id}/adjust-quantity`, data);
     return response.data;
   },
 

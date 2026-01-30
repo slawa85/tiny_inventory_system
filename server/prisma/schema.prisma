@@ -32,12 +32,20 @@ model Product {
   quantity    Int      @default(0)
   minStock    Int      @default(10)
   isActive    Boolean  @default(true)
+  version     Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   storeId     String
   store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
-  @@index([storeId])
+  // Single-column indexes
   @@index([category])
-  @@index([sku])
+  @@index([price])
+  @@index([quantity])
+  @@index([createdAt])
+
+  // Composite indexes for common query patterns
+  @@index([storeId, category])          // Filter by store + category
+  @@index([storeId, createdAt(sort: Desc)]) // Filter by store + default sort
+  @@index([storeId, price])             // Filter by store + price range
 }

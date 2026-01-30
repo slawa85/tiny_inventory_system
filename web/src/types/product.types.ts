@@ -10,6 +10,7 @@ export interface Product {
   quantity: number;
   minStock: number;
   isActive: boolean;
+  version: number;
   createdAt: string;
   updatedAt: string;
   storeId: string;
@@ -33,9 +34,15 @@ export interface UpdateProductDto {
   sku?: string;
   category?: string;
   price?: number;
-  quantity?: number;
   minStock?: number;
   isActive?: boolean;
+  version: number;
+}
+
+export interface AdjustQuantityDto {
+  adjustment: number;
+  reason: 'sale' | 'return' | 'restock' | 'damaged' | 'correction' | 'other';
+  note?: string;
 }
 
 export interface ProductQueryParams {

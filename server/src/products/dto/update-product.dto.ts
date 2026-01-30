@@ -1,50 +1,15 @@
-import {
-  IsString,
-  IsOptional,
-  IsNumber,
-  IsInt,
-  IsBoolean,
-  Min,
-  MaxLength,
-} from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class UpdateProductDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  name?: string;
+export const updateProductSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(1000).optional(),
+  sku: z.string().min(1).max(50).optional(),
+  category: z.string().min(1).max(100).optional(),
+  price: z.number().min(0).optional(),
+  minStock: z.number().int().min(0).optional(),
+  isActive: z.boolean().optional(),
+  version: z.number().int().min(0).describe('Required for optimistic locking'),
+});
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(1000)
-  description?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  sku?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  category?: string;
-
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  price?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  quantity?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  minStock?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
-}
+export class UpdateProductDto extends createZodDto(updateProductSchema) {}
