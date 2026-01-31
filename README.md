@@ -45,6 +45,38 @@ GET    /api/analytics/category-summary    # Product count and value by category
 GET    /api/health              # Health check
 ```
 
+## Beyond Basic CRUD
+
+Operations that go beyond simple create/read/update/delete:
+
+### Analytics Aggregations
+| Endpoint | Operation |
+|----------|-----------|
+| `/api/analytics/inventory-value` | Calculates total inventory value (price × quantity) grouped by store |
+| `/api/analytics/low-stock` | Finds products where `quantity <= minStock` threshold |
+| `/api/analytics/category-summary` | Aggregates product count and total value by category |
+
+### Atomic Quantity Adjustment
+```bash
+POST /api/products/:id/adjust-quantity
+{ "adjustment": -5, "reason": "sale" }
+```
+Uses Prisma's `increment`/`decrement` for atomic updates—avoids race conditions that would occur with read-modify-write patterns.
+
+### Optimistic Locking
+```bash
+PATCH /api/products/:id
+{ "name": "New Name", "version": 3 }
+```
+Checks version field before update; returns **409 Conflict** if another user modified the record since it was fetched.
+
+### Complex Product Queries
+The product list endpoint supports server-side:
+- **Multi-field filtering**: store, category, price range, stock status (inStock/lowStock)
+- **Full-text search**: across name, description, and SKU fields
+- **Pagination**: with metadata (total, totalPages, hasNextPage, hasPreviousPage)
+- **Sorting**: by name, price, quantity, or createdAt (asc/desc)
+
 ## Development
 
 ```bash
