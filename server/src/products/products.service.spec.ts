@@ -23,6 +23,14 @@ const mockProduct = {
   store: mockStore,
   createdAt: new Date(),
   updatedAt: new Date(),
+  version: 0,
+};
+
+const defaultQueryParams = {
+  page: 1,
+  limit: 20,
+  sortBy: 'createdAt' as const,
+  sortOrder: 'desc' as const,
 };
 
 const mockPrismaService = {
@@ -61,7 +69,7 @@ describe('ProductsService', () => {
       mockPrismaService.product.findMany.mockResolvedValue(products);
       mockPrismaService.product.count.mockResolvedValue(1);
 
-      const result = await service.findAll({ page: 1, limit: 20 });
+      const result = await service.findAll(defaultQueryParams);
 
       expect(result.data).toEqual(products);
       expect(result.meta.total).toBe(1);
@@ -73,7 +81,7 @@ describe('ProductsService', () => {
       mockPrismaService.product.findMany.mockResolvedValue([mockProduct]);
       mockPrismaService.product.count.mockResolvedValue(1);
 
-      await service.findAll({ storeId: mockStore.id });
+      await service.findAll({ ...defaultQueryParams, storeId: mockStore.id });
 
       expect(mockPrismaService.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -86,7 +94,7 @@ describe('ProductsService', () => {
       mockPrismaService.product.findMany.mockResolvedValue([mockProduct]);
       mockPrismaService.product.count.mockResolvedValue(1);
 
-      await service.findAll({ category: 'Electronics' });
+      await service.findAll({ ...defaultQueryParams, category: 'Electronics' });
 
       expect(mockPrismaService.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -99,7 +107,7 @@ describe('ProductsService', () => {
       mockPrismaService.product.findMany.mockResolvedValue([mockProduct]);
       mockPrismaService.product.count.mockResolvedValue(1);
 
-      await service.findAll({ minPrice: 50, maxPrice: 150 });
+      await service.findAll({ ...defaultQueryParams, minPrice: 50, maxPrice: 150 });
 
       expect(mockPrismaService.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -114,7 +122,7 @@ describe('ProductsService', () => {
       mockPrismaService.product.findMany.mockResolvedValue([mockProduct]);
       mockPrismaService.product.count.mockResolvedValue(1);
 
-      await service.findAll({ inStock: true });
+      await service.findAll({ ...defaultQueryParams, inStock: true });
 
       expect(mockPrismaService.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -129,7 +137,7 @@ describe('ProductsService', () => {
       mockPrismaService.product.findMany.mockResolvedValue([mockProduct]);
       mockPrismaService.product.count.mockResolvedValue(1);
 
-      await service.findAll({ search: 'test' });
+      await service.findAll({ ...defaultQueryParams, search: 'test' });
 
       expect(mockPrismaService.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -148,7 +156,7 @@ describe('ProductsService', () => {
       mockPrismaService.product.findMany.mockResolvedValue([mockProduct]);
       mockPrismaService.product.count.mockResolvedValue(50);
 
-      const result = await service.findAll({ page: 2, limit: 10 });
+      const result = await service.findAll({ ...defaultQueryParams, page: 2, limit: 10 });
 
       expect(result.meta.page).toBe(2);
       expect(result.meta.totalPages).toBe(5);
@@ -187,6 +195,8 @@ describe('ProductsService', () => {
       sku: 'NEW-001',
       category: 'Electronics',
       price: 149.99,
+      quantity: 0,
+      minStock: 10,
       storeId: mockStore.id,
     };
 
@@ -220,14 +230,14 @@ describe('ProductsService', () => {
 
   describe('update', () => {
     it('should update an existing product', async () => {
-      const updateDto = { name: 'Updated Product', price: 199.99 };
+      const updateDto = { name: 'Updated Product', price: 199.99, version: 0 };
       mockPrismaService.product.findUnique.mockResolvedValue(mockProduct);
       mockPrismaService.product.update.mockResolvedValue({ ...mockProduct, ...updateDto });
 
       const result = await service.update(mockProduct.id, updateDto);
 
-      expect(result.name).toBe(updateDto.name);
-      expect(result.price).toBe(updateDto.price);
+      expect(result!.name).toBe(updateDto.name);
+      expect(result!.price).toBe(updateDto.price);
     });
 
     it('should throw ConflictException if updating to existing SKU', async () => {
@@ -235,7 +245,7 @@ describe('ProductsService', () => {
       mockPrismaService.product.findFirst.mockResolvedValue({ ...mockProduct, id: 'other-id' });
 
       await expect(
-        service.update(mockProduct.id, { sku: 'EXISTING-SKU' }),
+        service.update(mockProduct.id, { sku: 'EXISTING-SKU', version: 0 }),
       ).rejects.toThrow(ConflictException);
     });
   });

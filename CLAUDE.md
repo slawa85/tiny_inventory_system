@@ -10,6 +10,8 @@ Build a full-stack inventory management system ("Tiny Inventory") that tracks st
 - **Backend:** NestJS with TypeScript
 - **Database:** PostgreSQL
 - **ORM:** Prisma
+- **Validation:** Zod (nestjs-zod) + Joi (env validation)
+- **Logging:** Pino (nestjs-pino)
 - **Testing:** Vitest (backend unit tests)
 - **Infrastructure:** Docker Compose (single command startup)
 - **Styling:** Tailwind CSS
@@ -49,7 +51,7 @@ Build a full-stack inventory management system ("Tiny Inventory") that tracks st
 - **Modular Architecture** - Each feature in its own NestJS module
 - **Dependency Injection** - NestJS DI container throughout
 - **Service Layer** - Thin controllers, all logic in services
-- **DTO Pattern** - Separate DTOs for create/update/query with class-validator
+- **DTO Pattern** - Separate DTOs for create/update/query with zod
 - **Global Exception Filter** - Centralized error handling
 
 **Patterns NOT Used (and why):**
@@ -64,43 +66,69 @@ Build a full-stack inventory management system ("Tiny Inventory") that tracks st
 
 ---
 
-## Security Concerns (NOT PRODUCTION READY)
+## Security Status
 
-### Current State - INSECURE
+### Implemented Security Measures
+
+| Security Measure | Implementation |
+|------------------|----------------|
+| CORS whitelist | Configurable via `CORS_ALLOWED_ORIGINS` env var; defaults to localhost in dev |
+| Rate limiting | `@nestjs/throttler` - 300 requests/minute per IP |
+| Security headers | `helmet` middleware enabled |
+| Input validation | `zod` schemas via `nestjs-zod` |
 
 ```typescript
-// main.ts - ALLOWS ALL ORIGINS
-app.enableCors({
-  origin: true,      // Accepts ANY origin
-  credentials: true,
+// main.ts - Current CORS config
+app.use(helmet());
+app.enableCors(getCorsConfig(config, logger)); // Whitelist-based
+
+// app.module.ts - Rate limiting
+ThrottlerModule.forRootAsync({
+  useFactory: (config: ConfigService) => ({
+    throttlers: [{ name: 'default', ttl: 60000, limit: 300 }],
+  }),
 });
 ```
 
-### Missing Security Measures
+### Still Missing (NOT PRODUCTION READY)
 
 | Security Measure | Status | Priority |
 |------------------|--------|----------|
-| CORS whitelist | ❌ Not implemented | HIGH |
 | Authentication (JWT/Session) | ❌ Not implemented | HIGH |
 | Authorization (RBAC) | ❌ Not implemented | HIGH |
-| Rate limiting | ❌ Not implemented | MEDIUM |
 | CSRF tokens | ❌ Not implemented | MEDIUM |
-| Security headers (Helmet) | ❌ Not implemented | MEDIUM |
-| Input sanitization | ⚠️ Basic (class-validator only) | LOW |
 
 ### Required for Production
 
 ```typescript
-// Proper CORS config
-app.enableCors({
-  origin: ['https://yourdomain.com'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-});
-
-// Add @nestjs/throttler for rate limiting
 // Add @nestjs/passport + passport-jwt for auth
-// Add helmet for security headers
+// Add CSRF protection for state-changing operations
+```
+
+---
+
+## Concurrency Handling
+
+The application uses a **hybrid approach** to handle concurrent updates:
+
+### Optimistic Locking (for metadata)
+Product updates require a `version` field. If another user modified the product, the update is rejected with a 409 Conflict.
+
+```bash
+PATCH /api/products/:id
+{ "name": "New Name", "price": 29.99, "version": 3 }
+
+# If version mismatch → 409 Conflict
+```
+
+### Delta Operations (for quantity)
+Quantity changes use atomic increments/decrements, avoiding conflicts entirely.
+
+```bash
+POST /api/products/:id/adjust-quantity
+{ "adjustment": -5, "reason": "sale" }
+
+# Multiple concurrent adjustments all succeed
 ```
 
 ---
@@ -133,10 +161,22 @@ model Product {
   quantity    Int      @default(0)
   minStock    Int      @default(10)
   isActive    Boolean  @default(true)
+  version     Int      @default(0)  // Optimistic locking
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   storeId     String
   store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  // Single-column indexes
+  @@index([category])
+  @@index([price])
+  @@index([quantity])
+  @@index([createdAt])
+
+  // Composite indexes for common query patterns
+  @@index([storeId, category])
+  @@index([storeId, createdAt(sort: Desc)])
+  @@index([storeId, price])
 }
 ```
 
@@ -159,8 +199,9 @@ model Product {
 | GET | `/api/products` | List products with filters/pagination |
 | GET | `/api/products/:id` | Get product details |
 | POST | `/api/products` | Create product |
-| PATCH | `/api/products/:id` | Update product |
+| PATCH | `/api/products/:id` | Update product (requires version for optimistic locking) |
 | DELETE | `/api/products/:id` | Delete product |
+| POST | `/api/products/:id/adjust-quantity` | Atomic quantity adjustment (delta operation) |
 
 **Query Parameters for Products:**
 ```
@@ -236,11 +277,13 @@ sortOrder=asc|desc     - Sort direction
 │   ├── vitest.config.ts
 │   ├── prisma/
 │   │   ├── schema.prisma
-│   │   ├── migrations/
-│   │   └── seed.ts
+│   │   └── migrations/
 │   ├── src/
 │   │   ├── main.ts
 │   │   ├── app.module.ts
+│   │   ├── seed.ts
+│   │   ├── config/
+│   │   │   └── env.validation.ts
 │   │   ├── common/
 │   │   │   ├── dto/
 │   │   │   │   ├── pagination-query.dto.ts
@@ -256,23 +299,29 @@ sortOrder=asc|desc     - Sort direction
 │   │   │   ├── stores.service.ts
 │   │   │   ├── stores.service.spec.ts
 │   │   │   └── dto/
+│   │   │       ├── create-store.dto.ts
+│   │   │       └── update-store.dto.ts
 │   │   ├── products/
 │   │   │   ├── products.module.ts
 │   │   │   ├── products.controller.ts
 │   │   │   ├── products.service.ts
 │   │   │   ├── products.service.spec.ts
 │   │   │   └── dto/
+│   │   │       ├── create-product.dto.ts
+│   │   │       ├── update-product.dto.ts
+│   │   │       ├── product-query.dto.ts
+│   │   │       └── adjust-quantity.dto.ts
 │   │   ├── analytics/
 │   │   │   ├── analytics.module.ts
 │   │   │   ├── analytics.controller.ts
 │   │   │   ├── analytics.service.ts
 │   │   │   ├── analytics.service.spec.ts
 │   │   │   └── dto/
+│   │   │       ├── inventory-value.dto.ts
+│   │   │       └── category-summary.dto.ts
 │   │   └── health/
 │   │       ├── health.module.ts
 │   │       └── health.controller.ts
-│   └── test/
-│       └── setup.ts
 └── web/
     ├── Dockerfile
     ├── nginx.conf
@@ -313,7 +362,8 @@ sortOrder=asc|desc     - Sort direction
         │       ├── ProductList.tsx
         │       ├── ProductTable.tsx
         │       ├── ProductForm.tsx
-        │       └── ProductFilters.tsx
+        │       ├── ProductFilters.tsx
+        │       └── QuantityAdjustment.tsx
         ├── hooks/
         │   ├── useStores.ts
         │   ├── useProducts.ts
@@ -403,7 +453,7 @@ Must include:
 
 ## Validation Requirements
 
-### Backend (class-validator)
+### Backend (zod)
 - Required fields validation
 - Type validation (numbers, strings)
 - Range validation (price > 0, quantity >= 0)
